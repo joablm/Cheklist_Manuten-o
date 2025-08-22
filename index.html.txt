@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Theme Color for PWA -->
+    <meta name="theme-color" content="#ffffff"/>
+    <title>Checklist Operacional – Gerador Elétrico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- PDF Export Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Signature Pad Library -->
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom checkbox style */
+        .custom-checkbox:checked {
+            background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
+        .task-item label {
+            transition: color 0.2s ease-in-out;
+        }
+        .task-item input:checked + label {
+            text-decoration: line-through;
+            color: #6b7280;
+        }
+        .form-input, .form-textarea {
+            @apply mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base;
+        }
+        .form-input[type="text"], .form-textarea {
+            text-transform: uppercase;
+        }
+        .form-textarea {
+            resize: none;
+            overflow: hidden;
+            min-height: 42px; /* Ensures a decent starting height */
+        }
+        /* Hide default file input */
+        #photo-upload-input {
+            display: none;
+        }
+        #signature-canvas {
+            touch-action: none;
+        }
+        .nav-link {
+            @apply px-4 py-2 text-lg font-medium text-gray-600 hover:text-blue-600 transition-colors cursor-pointer;
+        }
+        .nav-link.active {
+            @apply text-blue-600 border-b-2 border-blue-600;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <header class="bg-white shadow-md sticky top-0 z-40">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center">
+                <span class="text-2xl font-bold text-gray-800 mr-4">Evermat S.A</span>
+                <span class="text-xl text-gray-500 hidden sm:block">| Portal Operacional</span>
+            </div>
+            <div>
+                <a class="nav-link active" data-page="home-page">Início</a>
+                <a class="nav-link" data-page="checklist-page">Checklist</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto p-4 sm:p-6 md:p-8">
+        <!-- Home Page -->
+        <div id="home-page" class="page">
+            <div class="bg-white rounded-2xl shadow-lg p-8 text-center">
+                <h1 class="text-4xl font-bold text-gray-900 mb-4">Bem-vindo ao Portal Operacional</h1>
+                <p class="text-xl text-gray-600 mb-8">Sua ferramenta central para checklists e registros de manutenção.</p>
+                <button id="go-to-checklist-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
+                    Iniciar Checklist
+                </button>
+            </div>
+        </div>
+
+        <!-- Checklist Page -->
+        <div id="checklist-page" class="page hidden">
+            <div id="app-container" class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-12 border-b border-gray-200 pb-4">
+                    <div>
+                        <p class="text-lg font-semibold text-gray-700">Evermat S.A</p>
+                        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Checklist Operacional</h1>
+                        <p id="generator-tag-display" class="text-gray-600 mt-1">Geradores</p>
+                    </div>
+                    <div id="action-buttons" class="mt-4 sm:mt-0 flex flex-wrap gap-2 justify-start sm:justify-end w-full sm:w-auto">
+                        <button id="export-pdf-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
+                            Exportar PDF
+                        </button>
+                        <button id="reset-all-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
+                            Reiniciar
+                        </button>
+                        <button id="exit-checklist-button" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
+                            Sair
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="auth-status" class="mb-4 text-center">
+                    <p class="text-sm text-gray-500">Conectando ao banco de dados...</p>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                    <div>
+                        <label for="executor-name" class="block text-lg font-bold text-gray-800">Nome do Operador</label>
+                        <input type="text" id="executor-name" class="form-input">
+                    </div>
+                    <div>
+                        <label for="generator-tag" class="block text-lg font-bold text-gray-800">TAG do Gerador</label>
+                        <div class="flex items-center mt-1">
+                            <input type="text" id="generator-tag" class="form-input rounded-r-none">
+                            <button id="scan-qr-button" title="Ler QR Code" class="bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-r-md border border-l-0 border-gray-300 transition-colors flex items-center justify-center text-2xl">
+                                📲
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="generator-horimetro" class="block text-lg font-bold text-gray-800">Horímetro do Gerador (h)</label>
+                        <input type="number" id="generator-horimetro" class="form-input" step="0.1" placeholder="EX: 1234.5">
+                    </div>
+                     <div>
+                        <p class="block text-lg font-bold text-gray-800">Início da Inspeção</p>
+                        <p id="start-datetime" class="mt-1 text-base text-gray-900 font-medium"></p>
+                    </div>
+                    <div>
+                        <p class="block text-lg font-bold text-gray-800">Fim da Inspeção</p>
+                        <p id="end-datetime" class="mt-1 text-base text-gray-900 font-medium"></p>
+                    </div>
+                    <div>
+                        <p class="block text-lg font-bold text-gray-800">Nº da Inspeção</p>
+                        <p id="inspection-id" class="mt-1 text-base text-gray-900 font-medium"></p>
+                    </div>
+                </div>
+
+
+                <!-- Sections will be dynamically populated here -->
+                <div id="checklist-sections" class="space-y-8">
+                    <!-- Loading Spinner -->
+                    <div id="loading" class="flex justify-center items-center h-48">
+                        <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+                    </div>
+                </div>
+                
+                <!-- Photo Upload Section -->
+                <div id="photo-section" class="mt-8 bg-gray-50 rounded-xl p-5 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-800">Registros Fotográficos</h2>
+                    <p class="text-sm text-gray-500 mb-4">As imagens são incluídas no PDF, mas não são salvas no banco de dados.</p>
+                    <div class="mt-4">
+                        <label for="photo-upload-input" class="inline-block bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg cursor-pointer transition duration-300 ease-in-out">
+                            Adicionar Fotos
+                        </label>
+                        <input type="file" id="photo-upload-input" accept="image/*" multiple>
+                    </div>
+                    <div id="photo-gallery" class="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        <!-- Thumbnails will be added here -->
+                    </div>
+                </div>
+                
+                <!-- Signature Section -->
+                <div id="signature-section" class="mt-8 bg-gray-50 rounded-xl p-5 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-800">Assinatura do Operador</h2>
+                    <div class="mt-4 bg-white border border-gray-300 rounded-md">
+                        <canvas id="signature-canvas" class="w-full h-48"></canvas>
+                    </div>
+                    <div class="mt-2 text-right">
+                        <button id="clear-signature-button" class="text-sm text-blue-600 hover:underline">Limpar Assinatura</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <div id="qr-scanner-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-xl font-bold mb-4 text-center">Aponte para o QR Code</h3>
+            <div id="qr-reader" class="w-full border-2 border-gray-300 rounded-md overflow-hidden"></div>
+            <button id="close-scanner-button" class="mt-4 w-full bg-red-500 text-white py-2 rounded-md hover:bg-red-600 transition-colors">Cancelar</button>
+        </div>
+    </div>
+
+    <div id="success-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                    <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2">Sucesso!</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="modal-message" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="close-modal-button" class="px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-300">
+                        Fechar e Iniciar Novo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal for Reset -->
+    <div id="confirm-reset-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-xl font-bold mb-2">Confirmar Ação</h3>
+            <p class="text-gray-600 mb-6">Tem certeza que deseja reiniciar todo o formulário? A data e hora de início também serão redefinidas. Esta ação não pode ser desfeita.</p>
+            <div class="flex justify-end space-x-4">
+                <button id="cancel-reset-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancelar</button>
+                <button id="confirm-reset-btn" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600">Confirmar Reinício</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // --- PWA Service Worker Registration ---
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then(registration => {
+              console.log('ServiceWorker registrado com sucesso: ', registration.scope);
+            }, err => {
+              console.log('Registro do ServiceWorker falhou: ', err);
+            });
+          });
+        }
+
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, enableNetwork, disableNetwork } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- DATA STRUCTURE ---
+        const checklistData = {
+            operacional: {
+                title: "Checklist Operacional Diário",
+                tasks: [
+                    { id: "op_01", label: "Realizar inspeção visual geral (vazamentos, ruídos, vibrações)" },
+                    { id: "op_02", label: "Verificar nível do líquido de arrefecimento" },
+                    { id: "op_03", label: "Verificar nível do óleo do motor" },
+                    { id: "op_04", label: "Verificar nível de combustível e abastecer se necessário" },
+                    { id: "op_05", label: "Inspecionar filtro de ar (indicador de restrição)" },
+                    { id: "op_06", label: "Verificar tensão da bateria no painel" },
+                    { id: "op_07", label: "Verificar temperatura do motor e pressão do óleo no painel" },
+                    { id: "op_08", label: "Conferir estado de LEDs e display do controlador" },
+                    { id: "op_09", label: "Verificar se há alarmes ativos no painel do controlador" },
+                    { id: "op_10", label: "Realizar limpeza externa superficial do equipamento" }
+                ]
+            }
+        };
+
+        // --- UI ELEMENTS ---
+        const sectionsContainer = document.getElementById('checklist-sections');
+        const loadingSpinner = document.getElementById('loading');
+        const executorNameInput = document.getElementById('executor-name');
+        const generatorTagInput = document.getElementById('generator-tag');
+        const generatorHorimetroInput = document.getElementById('generator-horimetro');
+        const generatorTagDisplay = document.getElementById('generator-tag-display');
+        const startDateTimeEl = document.getElementById('start-datetime');
+        const endDateTimeEl = document.getElementById('end-datetime');
+        const inspectionIdEl = document.getElementById('inspection-id');
+        const photoUploadInput = document.getElementById('photo-upload-input');
+        const photoGallery = document.getElementById('photo-gallery');
+        const successModal = document.getElementById('success-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const closeModalButton = document.getElementById('close-modal-button');
+        const scanQrButton = document.getElementById('scan-qr-button');
+        const qrScannerModal = document.getElementById('qr-scanner-modal');
+        const closeScannerButton = document.getElementById('close-scanner-button');
+        const signatureCanvas = document.getElementById('signature-canvas');
+        const clearSignatureButton = document.getElementById('clear-signature-button');
+        let signaturePad;
+        let checklistInitialized = false;
+
+        // --- UI RENDERING & UPDATES ---
+        function renderChecklist() {
+            sectionsContainer.innerHTML = '';
+            for (const sectionKey in checklistData) {
+                const section = checklistData[sectionKey];
+                const sectionElement = document.createElement('div');
+                sectionElement.className = 'bg-gray-50 rounded-xl p-5 shadow-sm';
+                sectionElement.id = `section-${sectionKey}`;
+
+                let tasksHtml = section.tasks.map(task => `
+                    <div class="task-item py-3 border-b border-gray-200 last:border-b-0">
+                        <div class="flex items-center">
+                           <input type="checkbox" id="${task.id}" data-section="${sectionKey}" class="custom-checkbox h-5 w-5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer flex-shrink-0">
+                           <label for="${task.id}" class="ml-3 block text-base font-medium text-gray-700 cursor-pointer">${task.label}</label>
+                        </div>
+                        <div class="mt-2 pl-8">
+                           <label for="obs-${task.id}" class="block text-sm font-semibold text-gray-600 mb-1">Observações:</label>
+                           <textarea id="obs-${task.id}" class="form-textarea text-sm" placeholder="..."></textarea>
+                        </div>
+                    </div>
+                `).join('');
+
+                sectionElement.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">${section.title}</h2>
+                        <span id="progress-text-${sectionKey}" class="text-sm font-medium text-gray-600">0/0</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                        <div id="progress-bar-${sectionKey}" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <div class="space-y-2">${tasksHtml}</div>
+                `;
+                sectionsContainer.appendChild(sectionElement);
+            }
+            loadingSpinner.style.display = 'none';
+        }
+
+        function updateUI(dbState) {
+            // Update text fields
+            executorNameInput.value = dbState.executorName || '';
+            generatorTagInput.value = dbState.generatorTag || '';
+            generatorHorimetroInput.value = dbState.generatorHorimetro || '';
+            generatorTagDisplay.textContent = dbState.generatorTag || 'Geradores';
+            startDateTimeEl.textContent = dbState.startDateTime || 'Aguardando...';
+            inspectionIdEl.textContent = dbState.inspectionId || 'N/A';
+
+            // Update checkboxes, progress bars, and observation textareas
+            for (const sectionKey in checklistData) {
+                const section = checklistData[sectionKey];
+                let sectionTotal = section.tasks.length;
+                let sectionCompleted = 0;
+
+                section.tasks.forEach(task => {
+                    const checkbox = document.getElementById(task.id);
+                    if (checkbox) {
+                        const isChecked = dbState[task.id] === true;
+                        checkbox.checked = isChecked;
+                        if (isChecked) sectionCompleted++;
+                    }
+                    const obsTextarea = document.getElementById(`obs-${task.id}`);
+                    if(obsTextarea) {
+                        obsTextarea.value = dbState[`obs_${task.id}`] || '';
+                        autoResizeTextarea({ target: obsTextarea });
+                    }
+                });
+                
+                const progressPercentage = sectionTotal > 0 ? (sectionCompleted / sectionTotal) * 100 : 0;
+                const progressBar = document.getElementById(`progress-bar-${sectionKey}`);
+                const progressText = document.getElementById(`progress-text-${sectionKey}`);
+                if (progressBar) progressBar.style.width = `${progressPercentage}%`;
+                if (progressText) progressText.textContent = `${sectionCompleted}/${sectionTotal}`;
+            }
+        }
+        
+        function updateEndDateTime() {
+            const now = new Date();
+            const formattedDateTime = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR');
+            endDateTimeEl.textContent = formattedDateTime;
+        }
+        
+        // --- PHOTO HANDLING ---
+        function handlePhotoUpload(event) {
+            const files = event.target.files;
+            if (!files) return;
+
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const thumbnail = document.createElement('img');
+                    thumbnail.src = e.target.result;
+                    thumbnail.className = "w-full h-full object-cover rounded-md border-2 border-gray-200 shadow-sm";
+                    
+                    const thumbnailContainer = document.createElement('div');
+                    thumbnailContainer.className = "aspect-square overflow-hidden";
+                    thumbnailContainer.appendChild(thumbnail);
+                    
+                    photoGallery.appendChild(thumbnailContainer);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        // --- PDF EXPORT ---
+        async function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            
+            const exportButton = document.getElementById('export-pdf-button');
+            exportButton.innerText = 'Gerando...';
+            exportButton.disabled = true;
+
+            const margin = 15;
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const contentWidth = pdf.internal.pageSize.getWidth() - (margin * 2);
+            let currentY = margin;
+
+            const addPageIfNeeded = (neededHeight) => {
+                if (currentY + neededHeight > pageHeight - margin) {
+                    addFooter();
+                    pdf.addPage();
+                    currentY = margin;
+                    addHeader(true); // isContinuationPage = true
+                }
+            };
+
+            const addHeader = (isContinuationPage = false) => {
+                if (!isContinuationPage) {
+                    pdf.setFontSize(12);
+                    pdf.setFont(undefined, 'bold');
+                    pdf.text("Evermat S.A", margin, currentY + 8);
+                }
+                pdf.setFontSize(20);
+                pdf.setFont(undefined, 'bold');
+                pdf.text("Checklist Operacional", pdf.internal.pageSize.getWidth() / 2, currentY + 8, { align: 'center' });
+                currentY += 25; 
+            };
+            
+            const addFooter = () => {
+                const pageBottom = pageHeight - 10;
+                pdf.setFontSize(8);
+                pdf.setTextColor(150);
+                const watermarkText = "EVERMAT S.A";
+                const watermarkX = pdf.internal.pageSize.getWidth() - margin;
+                pdf.text(watermarkText, watermarkX, pageBottom, { align: 'right' });
+            };
+
+            // --- Start PDF Generation ---
+            addHeader();
+
+            // Add Form Fields Data
+            pdf.setFontSize(12);
+            pdf.setFont(undefined, 'bold');
+            pdf.text("Dados da Inspeção", margin, currentY);
+            currentY += 8;
+
+            const fields = [
+                { label: "Nome do Operador:", value: executorNameInput.value },
+                { label: "TAG do Gerador:", value: generatorTagInput.value },
+                { label: "Horímetro (h):", value: generatorHorimetroInput.value },
+                { label: "Início da Inspeção:", value: startDateTimeEl.textContent },
+                { label: "Fim da Inspeção:", value: endDateTimeEl.textContent },
+                { label: "Nº da Inspeção:", value: inspectionIdEl.textContent },
+            ];
+
+            pdf.setFontSize(10);
+            pdf.setFont(undefined, 'normal');
+            fields.forEach(field => {
+                addPageIfNeeded(10);
+                pdf.setFont(undefined, 'bold');
+                pdf.text(field.label, margin, currentY);
+                pdf.setFont(undefined, 'normal');
+                pdf.text(field.value || 'N/A', margin + 50, currentY);
+                currentY += 7;
+            });
+            currentY += 5;
+
+            // Add Checklist Items
+            for (const sectionKey in checklistData) {
+                const section = checklistData[sectionKey];
+                addPageIfNeeded(12);
+                pdf.setFontSize(14);
+                pdf.setFont(undefined, 'bold');
+                pdf.text(section.title, margin, currentY);
+                currentY += 10;
+
+                section.tasks.forEach(task => {
+                    const checkbox = document.getElementById(task.id);
+                    const obsText = document.getElementById(`obs-${task.id}`).value;
+                    const taskLabelLines = pdf.splitTextToSize(task.label, contentWidth - 8);
+                    const obsLines = obsText ? pdf.splitTextToSize(`Observações: ${obsText}`, contentWidth - 12) : [];
+                    const neededHeight = (taskLabelLines.length * 5) + (obsLines.length * 4) + 6;
+                    
+                    addPageIfNeeded(neededHeight);
+
+                    pdf.setFontSize(11);
+                    pdf.setFont(undefined, 'normal');
+                    pdf.rect(margin, currentY - 4, 4, 4);
+                    if (checkbox.checked) {
+                        pdf.text('X', margin + 1, currentY);
+                    }
+                    pdf.text(taskLabelLines, margin + 6, currentY);
+                    currentY += taskLabelLines.length * 5;
+
+                    if (obsText) {
+                        currentY += 1;
+                        pdf.setFontSize(9);
+                        pdf.setTextColor(80);
+                        pdf.text(obsLines, margin + 10, currentY);
+                        currentY += obsLines.length * 4;
+                        pdf.setTextColor(0);
+                    }
+                    currentY += 5;
+                });
+            }
+
+            // Add Photos
+            const images = photoGallery.getElementsByTagName('img');
+            if (images.length > 0) {
+                addPageIfNeeded(15);
+                currentY += 5;
+                pdf.setFontSize(14);
+                pdf.setFont(undefined, 'bold');
+                pdf.text("Registros Fotográficos", margin, currentY);
+                currentY += 10;
+
+                const imgWidth = (contentWidth / 2) - 2;
+                let xPos = margin;
+                for (let i = 0; i < images.length; i++) {
+                    addPageIfNeeded(imgWidth + 5);
+                    try {
+                        pdf.addImage(images[i].src, 'PNG', xPos, currentY, imgWidth, imgWidth);
+                    } catch(e) { console.error("Error adding image to PDF:", e); }
+                    
+                    if ((i + 1) % 2 === 0) {
+                        currentY += imgWidth + 5;
+                        xPos = margin;
+                    } else {
+                        xPos += imgWidth + 4;
+                    }
+                }
+            }
+            
+            // Add Signature
+            if (!signaturePad.isEmpty()) {
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = signatureCanvas.width;
+                tempCanvas.height = signatureCanvas.height;
+                tempCtx.fillStyle = "#FFFFFF";
+                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                tempCtx.drawImage(signatureCanvas, 0, 0);
+                const signatureImage = tempCanvas.toDataURL('image/png');
+
+                const sigHeight = 30;
+                const sigWidth = 80;
+                addPageIfNeeded(sigHeight + 20);
+                currentY += 10;
+                pdf.addImage(signatureImage, 'PNG', margin, currentY, sigWidth, sigHeight);
+                pdf.line(margin, currentY + sigHeight, margin + sigWidth, currentY + sigHeight); // Signature line
+                pdf.setFontSize(9);
+                pdf.text(executorNameInput.value || "Assinatura do Operador", margin, currentY + sigHeight + 5);
+            }
+
+            addFooter();
+            
+            const tag = generatorTagInput.value || "gerador";
+            pdf.save(`Checklist_${tag.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+
+            // Show success modal after saving
+            modalMessage.textContent = `Relatório "${inspectionIdEl.textContent}" foi exportado.`;
+            successModal.classList.remove('hidden');
+            
+            exportButton.innerText = 'Exportar PDF';
+            exportButton.disabled = false;
+        }
+
+
+        // --- FIREBASE SETUP & DATA HANDLING ---
+        let db, auth, userId, docRef;
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-checklist-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const authStatusEl = document.getElementById('auth-status');
+
+        async function initializeFirebase() {
+            if (!firebaseConfig) {
+                authStatusEl.innerHTML = '<p class="text-red-500">Erro: Configuração do Firebase não encontrada.</p>';
+                loadingSpinner.style.display = 'none';
+                return;
+            }
+            
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Handle online/offline status for Firestore
+                window.addEventListener('offline', () => {
+                    disableNetwork(db).then(() => {
+                        console.log("Firestore network disabled.");
+                        authStatusEl.innerHTML = `<p class="text-xs text-yellow-600">Modo Offline. Alterações serão salvas localmente.</p>`;
+                    });
+                });
+                window.addEventListener('online', () => {
+                    enableNetwork(db).then(() => {
+                        console.log("Firestore network enabled.");
+                        authStatusEl.innerHTML = `<p class="text-xs text-green-600">Conectado. Sincronizando dados... ID: ${userId.substring(0,8)}...</p>`;
+                    });
+                });
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        authStatusEl.innerHTML = `<p class="text-xs text-green-600">Conectado. ID: ${userId.substring(0,8)}...</p>`;
+                        const docPath = `/artifacts/${appId}/users/${userId}/data/checklistState`;
+                        docRef = doc(db, docPath);
+                        await setupRealtimeListener();
+                    } else {
+                        await (initialAuthToken ? signInWithCustomToken(auth, initialAuthToken) : signInAnonymously(auth));
+                    }
+                });
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                authStatusEl.innerHTML = '<p class="text-red-500">Falha ao conectar com o banco de dados.</p>';
+                loadingSpinner.style.display = 'none';
+            }
+        }
+
+        async function setupRealtimeListener() {
+            const docSnap = await getDoc(docRef);
+            if (!docSnap.exists() || !docSnap.data().startDateTime) {
+                await resetAllDataInDB(true);
+            }
+
+            onSnapshot(docRef, (doc) => {
+                updateUI(doc.data() || {});
+            }, (error) => {
+                console.error("Error with real-time listener:", error);
+                authStatusEl.innerHTML = '<p class="text-red-500">Erro de conexão em tempo real.</p>';
+            });
+        }
+        
+        async function updateFieldInDB(field, value) {
+            if (!docRef) return;
+            try {
+                await setDoc(docRef, { [field]: value }, { merge: true });
+            } catch (error) {
+                console.error(`Error updating ${field}:`, error);
+            }
+        }
+
+        async function resetAllDataInDB(isInitialSetup = false) {
+            if (!docRef) return;
+            const initialState = {
+                executorName: '',
+                generatorTag: '',
+                generatorHorimetro: '',
+                inspectionId: ''
+            };
+            Object.keys(checklistData).forEach(sectionKey => {
+                checklistData[sectionKey].tasks.forEach(task => {
+                    initialState[task.id] = false;
+                    initialState[`obs_${task.id}`] = '';
+                });
+            });
+            
+            if(isInitialSetup) {
+                 const now = new Date();
+                 initialState.startDateTime = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR');
+                 const year = now.getFullYear();
+                 const randomSeq = Math.random().toString(36).substring(2, 8).toUpperCase();
+                 initialState.inspectionId = `${year}-${randomSeq}`;
+            }
+
+            try {
+                await setDoc(docRef, initialState);
+                photoGallery.innerHTML = '';
+                if(signaturePad) signaturePad.clear();
+                updateUI(initialState);
+            } catch (error) {
+                console.error("Error resetting checklist:", error);
+            }
+        }
+        
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+
+        function autoResizeTextarea(event) {
+            const textarea = event.target;
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+
+        function resizeCanvas() {
+            if (!signaturePad) return;
+            const ratio =  Math.max(window.devicePixelRatio || 1, 1);
+            signatureCanvas.width = signatureCanvas.offsetWidth * ratio;
+            signatureCanvas.height = signatureCanvas.offsetHeight * ratio;
+            signatureCanvas.getContext("2d").scale(ratio, ratio);
+            signaturePad.clear(); 
+        }
+
+        // --- NAVIGATION LOGIC ---
+        function switchPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => page.classList.add('hidden'));
+            document.getElementById(pageId).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.toggle('active', link.dataset.page === pageId);
+            });
+
+            if (pageId === 'checklist-page' && !checklistInitialized) {
+                initializeChecklistApp();
+                checklistInitialized = true;
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => switchPage(e.target.dataset.page));
+            });
+            
+            document.getElementById('go-to-checklist-btn').addEventListener('click', () => switchPage('checklist-page'));
+
+            sectionsContainer.addEventListener('change', (event) => {
+                if (event.target.type === 'checkbox') {
+                    updateFieldInDB(event.target.id, event.target.checked);
+                }
+            });
+
+            const textInputs = document.querySelectorAll('.form-input[type="text"], .form-textarea');
+            textInputs.forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const start = e.target.selectionStart;
+                    const end = e.target.selectionEnd;
+                    e.target.value = e.target.value.toUpperCase();
+                    e.target.setSelectionRange(start, end);
+                });
+            });
+
+            executorNameInput.addEventListener('input', debounce((e) => updateFieldInDB('executorName', e.target.value), 500));
+            generatorTagInput.addEventListener('input', debounce((e) => updateFieldInDB('generatorTag', e.target.value), 500));
+            generatorHorimetroInput.addEventListener('input', debounce((e) => updateFieldInDB('generatorHorimetro', e.target.value), 500));
+
+            Object.keys(checklistData).forEach(sectionKey => {
+                 checklistData[sectionKey].tasks.forEach(task => {
+                    const obsTextarea = document.getElementById(`obs-${task.id}`);
+                    if (obsTextarea) {
+                        obsTextarea.addEventListener('input', autoResizeTextarea);
+                        obsTextarea.addEventListener('input', debounce((e) => updateFieldInDB(`obs_${task.id}`, e.target.value), 500));
+                    }
+                });
+            });
+
+            // --- Reset Button Logic ---
+            const confirmResetModal = document.getElementById('confirm-reset-modal');
+            const cancelResetBtn = document.getElementById('cancel-reset-btn');
+            const confirmResetBtn = document.getElementById('confirm-reset-btn');
+
+            document.getElementById('reset-all-button').addEventListener('click', () => {
+                confirmResetModal.classList.remove('hidden');
+            });
+
+            cancelResetBtn.addEventListener('click', () => {
+                confirmResetModal.classList.add('hidden');
+            });
+
+            confirmResetBtn.addEventListener('click', () => {
+                resetAllDataInDB(true);
+                confirmResetModal.classList.add('hidden');
+            });
+
+            // --- Exit Button Logic ---
+            document.getElementById('exit-checklist-button').addEventListener('click', () => {
+                switchPage('home-page');
+            });
+
+            // --- QR SCANNER LOGIC ---
+            const html5QrCode = new Html5Qrcode("qr-reader");
+            const onScanSuccess = (decodedText, decodedResult) => {
+                console.log(`Code matched = ${decodedText}`, decodedResult);
+                generatorTagInput.value = decodedText.toUpperCase();
+                // Trigger input event to save to DB
+                generatorTagInput.dispatchEvent(new Event('input', { bubbles: true }));
+                html5QrCode.stop().then(() => {
+                    qrScannerModal.classList.add('hidden');
+                }).catch(err => console.error("Failed to stop QR scanner:", err));
+            };
+            const onScanFailure = (error) => {
+                // console.warn(`Code scan error = ${error}`);
+            };
+            
+            scanQrButton.addEventListener('click', () => {
+                qrScannerModal.classList.remove('hidden');
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    onScanSuccess,
+                    onScanFailure
+                ).catch(err => {
+                    console.error("Não foi possível iniciar a câmara.", err);
+                    authStatusEl.innerHTML = `<p class="text-xs text-red-600">Erro na câmara. Verifique as permissões.</p>`;
+                    qrScannerModal.classList.add('hidden');
+                });
+            });
+
+            closeScannerButton.addEventListener('click', () => {
+                html5QrCode.stop().then(() => {
+                    qrScannerModal.classList.add('hidden');
+                }).catch(err => console.error("Failed to stop QR scanner:", err));
+            });
+
+            document.getElementById('export-pdf-button').addEventListener('click', exportToPDF);
+            
+            photoUploadInput.addEventListener('change', handlePhotoUpload);
+            
+            closeModalButton.addEventListener('click', () => {
+                successModal.classList.add('hidden');
+                resetAllDataInDB(true);
+            });
+            
+            clearSignatureButton.addEventListener('click', () => {
+                signaturePad.clear();
+            });
+            
+            window.addEventListener("resize", resizeCanvas);
+        }
+
+        // --- INITIALIZATION ---
+        async function initializeChecklistApp() {
+            renderChecklist();
+            signaturePad = new SignaturePad(signatureCanvas);
+            resizeCanvas();
+            updateEndDateTime();
+            setInterval(updateEndDateTime, 1000);
+            setupEventListeners();
+            await initializeFirebase();
+        }
+
+        // Initial page setup
+        setupEventListeners();
+
+    </script>
+</body>
+</html>
